@@ -1,0 +1,164 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+
+\title{Travail pratique \#2 - IFT-2245}
+\author{Boumediene Boukharouba
+20032279\\
+Alexandre Deneault
+20044305}
+
+\begin{document}
+
+\maketitle
+
+\section{Description du travail}
+
+Le deuxième travail pratique consistait à implanter l'algorithme du banquier 
+dans une structure client-serveur. Le programmes client et serveur devaient 
+utiliser des socket pour communiquer. À l'intérieur des deux programmes, 
+plusieurs threads client et serveur doivent s'exécuter en même temps en 
+évitant les conditions de course dans les sections critiques. Les clients 
+doivent demander des ressources au serveur qui doit utiliser l'algorithme du banquier 
+afin d'éviter les interbloquages.
+
+
+\section{Recherche}
+
+\subsection{Multithreading}
+
+Le multithreading est une notion fondamentale pour accomplir ce TP. De ce fait, nous
+avons, dans un premier temps,révisé les notes de cours à ce sujet. Toutesfois, ce n'était 
+pas suffisant. Par conséquent, nous avons cherché dans la documentation la sémantique exacte
+des méthodes à utiliser. 
+
+
+\subsection{Prévention des conditions de courses}
+
+Pour la prévention des séquencement critiques, les notes de cours 
+étaient suffisante, à l'exception de l'utilisation des sémaphores oû il a fallut vérifier 
+la syntaxe des méthodes dans la documentation.
+
+
+\subsection{Évitement d'interblocage}
+
+L'algorithme du banquier a été bien expliqué en classe. Nous avons simplement revu 
+l'algorithme dans les notes de cours afin de bien l'implémenter.
+
+\subsection{Communication entre processus via socket}
+
+La partie la plus longue du travail a été de faire la recherche sur les sockets 
+et réussir à bien les utiliser. Cette matière n'a pas été vu en classe. Il n'y 
+avait qu deux diapositives et deux illustrations dans les notes de cours à ce sujet.
+Nous avons eu besoin de 2-3 jours pour faire la recherche et être en mesure de les 
+utiliser. Nous avons d'abord cherché dans la documentation, cependant elle ne fait 
+que décrire très brievèment ce que chaque méthode fait. Elle ne donne aucun indice 
+sur quelle méthode utiliser et à quel endroit les utiliser (du côté client ou du 
+côté serveur). Il a fallut chercher des tutoriels en ligne, mais la pluspart de 
+ceux-ci n'expliquait pas bien le fonctionnement des méthodes et leur utilité. Nous 
+avons fini par trouver un tutoriel qui expliquait l'utilisation des méthodes et des 
+structures mieux que les autres (http://www.beej.us/guide/bgnet/output/html/singlepage/bgnet.html).
+Il nous a permis de bien démarrer le travail.
+
+
+\section{Implémentation}
+
+\subsection{Communication client-serveur}
+
+Nous avons débuté l'implémentation du code par l'utilisation des sockets puisque les 
+données pour les autres parties du travail doivent voyager entre les deux processus. 
+De plus, puisque nous n'avions pas vu cette notion en classe, nous savions que nous 
+devions faire de la recherche pour bien comprendre ce que nous faisions. La recherche 
+a pris beaucoup plus de temps que prévu! Après avoir bien compris l'utilisation des socket, 
+nous avons créé une méthode pour ouvrir les sockets du côté client. Cette méthode ouvre 
+la connexion avec le serveur et retourne le descripteur du fichier de la socket au thread 
+client qui l'a appelé. Du côté serveur l'attente de la connexion d'un client était déjà 
+implanté dans le code fournit. Par la suite, chacun des threads clients utilise le descripteur 
+de fichier pour envoyer et recevoir des lignes de texte du serveur. 
+
+
+\subsection{Traitement des requêtes}
+
+\paragraph{}
+Du côté serveur, nous avons créé une méthode afin d'extraire les paramètres des lignes 
+de texte et retourner un tableau d'entier contenant la valeur des paramètres. Le 
+programme client commence par envoyer les commandes "INI" et "PRO" au serveur à 
+l'aide d'une première connexion. Le serveur met les paramètres de ces deux requêtes dans
+des variables avant de répondre au client. Ensuite, le programme client démarre l'exécution 
+des différents threads clients et se met en attente. Par la suite,les threads clients 
+choisissent au hasard un nombre maximal de chacune des ressources qu'ils vont utiliser. 
+Ils envoient ensuite la commande "INI" au serveur et attendent une réponse. Le serveur 
+reçoit les commande et traite un client à la fois. Il enregistre les paramètres de la 
+commande "INI" reçu du client dans le tableau de ressources maximales et initialise les 
+ressources allouées à 0. Il répond ensuite au client. 
+
+\paragraph{}
+Suite à la réponse du serveur, le client commence à envoyer les requête. Il choisit au 
+hasard le nombre de chaque ressource à demander au serveur(à l'exception de la dernière 
+qui libère les ressources tenues). Il envoit alors la commande "REQ" au serveur. Lorsque 
+le serveur accepte la requête, le client met à jour le tableau des ressources qu'il tient, 
+met la variables qui compte les requêtes à jour  
+et passe à la prochaine requête. À la réception de la requête du client, le serveur vérifie 
+que la requête est valide et exécute l'algorithme du banquier. Si l'état est sûr, il accepte 
+la requête. Si l'état n'est pas sûr, il attend un peu et recommence l'algorithme du banquier.
+Le serveur met les variables qui comptent les requêtes reçu et accepté à jour avant de répondre 
+au client.
+
+\paragraph{}
+Lorsque les clients ont terminé leurs requêtes, ils envoient la commande "CLO" au serveur 
+afin de terminer leur exécution. Si les ressources ont bien été rendues, le serveur accepte 
+la fermeture. Si ce n'est pas le cas, le serveur force le client à rendre les ressources avant 
+de fermer la connexion. Le serveur et le client mettent les variables servant à compter les 
+client à jour.
+
+\paragraph{}
+Chaque modification aux tableaux contenant les ressources maximales et les ressources allouées 
+ainsi que les compteurs de requête est précédé d'un "wait" du sémaphore et suivi d'un "post". 
+Nous avons décidé d'utiliser un seul sémaphore pour gérer les accès aux sections critiques par 
+souci de simplicité. De plus, comme chaque section critique est très courte, nous ne penssons 
+pas que l'utilisation de plusieurs sémaphores permettrait d'améliorer la performance.
+
+\paragraph{}
+Lorsque tout les clients ont terminé d'envoyer leurs requêtes et qu'il se sont fermé, le programme 
+client envoit la commande "END" au serveur afin de le fermer. S'il ne reste plus de client connecté, 
+le serveur se ferme et répond au client, lui signifiant qu'il peut se terminer à son tour. S'il reste 
+des clients connecté au serveur lors du "END", le serveur force la fermeture des clients avant de se 
+fermer. Les programmes client et serveur impriment leur rapport avant de terminer leur exécution.
+
+
+\section{Conclusion}
+En conclusion, ce travil a demandé énormément de recherche avant de pouvoir débuter la conception. 
+De plus, recevoir le travil pendant les semaines d'examen nous a privé de beaucoup de temps pour 
+faire ledit travil. Nous n'avons pas pu y toucher lors des deux premières semaines à cause de l'étude 
+pour les examens. Cela dit, ce travail nous a permis de tester nos capacité d'autoapprentissage. 
+Nous sommes assez fier du travail accomplit.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\end{document}

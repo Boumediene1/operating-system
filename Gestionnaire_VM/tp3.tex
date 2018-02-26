@@ -1,0 +1,222 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsfonts}            %For \leadsto
+\usepackage{amsmath}             %For \text
+\usepackage{fancybox}            %For \ovalbox
+
+\title{Travail pratique \#3}
+\author{IFT-2245}
+
+\begin{document}
+
+\maketitle
+
+{\centering \ovalbox{\large ¡¡ Dû le 27 avril à 23h59 !!} \\}
+
+\newcommand \mML {\ensuremath\mu\textsl{ML}}
+\newcommand \kw [1] {\textsf{#1}}
+\newcommand \id [1] {\textsl{#1}}
+\newcommand \punc [1] {\kw{`#1'}}
+\newcommand \str [1] {\texttt{"#1"}}
+\newenvironment{outitemize}{
+  \begin{itemize}
+  \let \origitem \item \def \item {\origitem[]\hspace{-18pt}}
+}{
+  \end{itemize}
+}
+\newcommand \Align [2][t] {
+  \begin{array}[#1]{@{}l}
+    #2
+  \end{array}}
+
+\section{Survol}
+
+Ce TP vise à vous familiariser avec les éléments de la mémoire virtuelles.
+Les étapes de ce travail sont les suivantes:
+\begin{enumerate}
+\item Lire et comprendre cette donnée.  Cela prendra probablement une partie
+  importante du temps total.
+\item Lire, trouver, et comprendre les parties importantes du code fourni.
+\item Compléter le code fourni.
+\item Écrire un rapport.  Il doit décrire \textbf{votre} expérience pendant
+  les points précédents: problèmes rencontrés, surprises, choix que vous
+  avez dû faire, options que vous avez sciemment rejetées, etc...  Le
+  rapport ne doit pas excéder 5 pages.
+\end{enumerate}
+
+Ce travail est à faire en groupes de 2 étudiants.  Le rapport, au format
+\LaTeX\ exclusivement (compilable sur \texttt{frontal.iro}) et le code sont
+à remettre par remise électronique avant la date indiquée.  Aucun retard ne
+sera accepté.  Indiquer clairement le(s) nom(s) au début de chaque fichier.
+
+Si un étudiant préfère travailler seul, libre à lui, mais l'évaluation de
+son travail n'en tiendra pas compte.  Si un étudiant ne trouve pas de
+partenaire, il doit me contacter au plus vite.  Des groupes de 3 ou plus
+sont \textbf{exclus}.
+
+\newpage
+\section{Introduction}
+
+Dans ce travail pratique, vous devrez implémenter en langage C un programme
+qui simule un gestionnaire de mémoire virtuelle par pagination (paging).
+Votre solution simulera des accès mémoire consécutifs en traduisant les
+adresses logiques en adresses physiques de 16 bits dans un espace d'adresses
+virtuelle (virtual address space) de taille $2^{16}$ = 65536 bytes.
+
+Votre programme devra lire et exécuter une liste de commandes sur des adresses
+logiques.  Pour y arriver il devra traduire chacune des adresses logiques à son
+adresse physique correspondante en utilisant un TLB (Translation Look-aside
+Buffer) et une table de pages (page table).
+
+\section{Mise en place}
+
+Le code fournis utilise un fichier \texttt{GNUmakefile} qui vous aidera lors
+du développement.  Le projet dépend des programmes \texttt{bison} et
+\texttt{flex} disponibles sur les environnement GNU/Linux, Cygwin et OSX.
+
+Ce TP est basé sur un projet du livre de référence utilisé dans le cours, et
+il vous aidera à mettre en pratique les sections 8.5 (paging), 9.2 (demand
+paging) et 9.4 (page replacement).
+
+Vous trouverez dans ces section tous les concepts nécessaires.  Pour vous
+simplifier la tâche, on simulera une mémoire physique qui ne contient que
+des caractères imprimables (ASCII).  C'est-à-dire, pour une mémoire physique
+de 8KB (32 frames par 256 bytes), chacune de ses entrées contiennent un
+caractère parmi les 95 caractères imprimables ASCII possibles.
+Plus spécifiquement, le code fourni comprendsdéjà les structures de données
+de base pour un gestionnaire de mémoire avec les paramètres suivants
+(src/conf.h):
+
+\begin{itemize}
+\item 256 entrées dans la page table
+\item Taille des pages et des frames de 256 bytes
+\item 8 entrées dans le TLB
+\item 32 frames
+\item Mémoire physique de 32754 bytes
+\end{itemize}
+
+\section{Description du projet}
+
+Puisqu'on a un espace de mémoire virtuelle de taille $2^{16}$ on utilisera
+des adresses logiques de 16 bits qui encodent le numéro de page et le
+décalage (offset).
+
+Par exemple l'adresse logique 1081 représente la page 4 avec un décalage
+(offset) de 57.
+
+Votre programme devra lire de l'entrée standard (stdin) une liste de
+commandes de lecture ou d'écriture.  Vous devrez décoder le numéro de page
+et l'offset correspondant et ensuite traduire chaque adresse logique à son
+adresse physique, en utilisant le TLB si possible (TLB-hit) ou la table de
+page dans le cas d'un TLB-miss.
+
+\section{Traitement de Page Faults}
+
+Dans le cas d'un TLB-miss (page non trouvé dans le TLB), le page demandée
+doit être recherchée dans la table de pages. Si elle est déjà présente dans
+la table de pages, on obtient directement le frame correspondant. Dans le
+cas contraire, un page-fault est produit.
+
+Votre programme devra implémenter la pagination sur demande (section 9.2 du
+livre). Lorsque un page-fault est produit, vous devez lire une page de
+taille 256 bytes du fichier \texttt{BACKING\_STORE.txt} et le stocker dans un
+frame disponible dans la mémoire physique (au début du programme la mémoire
+physique commence toujours vide).
+
+Par exemple, si l'adresse logique avec numéro de page 15 produit un
+page-fault, votre programme doit lire la page 15 depuis le
+\texttt{BACKING\_STORE.txt} (rapellez-vous que les pages commencent
+à l'index 0 et qu'elles font 256 bytes) et copier son contenu dans une frame
+libre dans la mémoire physique.  Une fois ce frame stocké (et que la table
+de pages et le TLB sont mis à jour), les futurs accès à la page 15, seront
+adressé soit par le TLB ou soit par la table de page jusqu'à ce que la page
+soit déchargé de la mémoire (swapped out). Le fichier
+\texttt{BACKING\_STORE.txt} est déjà ouvert et fermé pour vous. Il contient
+65536 caractères imprimables aléatoires. Suggestion: utilisez les fonctions
+de stdio.h pour simuler l'accès aléatoire à ce fichier.
+
+\section{Commandes}
+
+Les commandes sont automatiquement lues par les fichiers générés par
+\texttt{flex} et \texttt{bison}.  Les fonctions \texttt{vmm\_read} et \texttt{vmm\_write} sont
+automatiquement appelées.  Vous ne devriez donc vous préoccuper du
+fonctionnement du programme qu'à partir de la gestion des commandes lues.
+
+La lecture des commandes se fait par l'entrée standard (\texttt{stdin}) et les
+commandes invalides sont ignorées. Les commandes sont insensible à la casse
+et les espaces sont ignorés.  Les commandes sont de la forme suivante:
+
+\begin{center}
+  \begin{tabular}{ll}
+    \begin{tabular}{l}
+      commande d'écriture \\ \hline \hline
+      \texttt{W} \id{logical-address} '\id{char-to-write}'; \\
+      ex: \texttt{W20'b';}
+    \end{tabular} &
+        \begin{tabular}{l}
+          commande de lecture \\ \hline \hline
+          \texttt{R} \id{logical-address}; \\
+          ex: \texttt{R89;}
+        \end{tabular}
+  \end{tabular}
+\end{center}
+
+\subsection{Makefile}
+
+Pour vous faciliter le travail, le fichier \texttt{GNUmakefile} de l'archive
+vous permet d'utiliser les commandes suivantes:
+\begin{itemize}
+\item \texttt{make} ou \texttt{make all}: Compile l'application.
+\item \texttt{make release}: Archive le code dans un \kw{tar} pour la remise.
+\item \texttt{make run}: Lance le client et le serveur ensembles.
+\item \texttt{make clean}: Nettoie le dossier build.
+\end{itemize}
+
+\section{Travail à effectuer}
+
+Vous devez implémenter les fonctions incomplètes de \texttt{vmm.c},
+\texttt{pm.c}, \texttt{pt.c}, et \texttt{tlb.c}, y compris l'implémentation
+de l'algorithme de remplacement du TLB et des frames ainsi que la gestion de
+l'état ``dirty'' des pages.
+
+De plus, vous devez corriger les sorties déjà définies dans les fonctions
+\texttt{vmm\_read} et \texttt{vmm\_write} afin de fournir l'ensemble des
+valeurs qu'il faut afficher.  
+
+Finalement, vous devez fournir 2 fichiers de tests
+\texttt{tests/command1.in} et \texttt{tests/command2.in}.  Le premier
+devrait principalement tester l'efficacité du TLB alors que le deuxième
+devrait aussi tester l'algorithme de remplacement des pages.
+
+\section{Remise}
+
+Remettez sur Studium l'archive générée par la commande \texttt{make release}.
+Assurez-vous que tout fonctionne correctement sur \texttt{frontal.iro}.
+
+\section{Détails}
+
+\begin{itemize}
+\item La note (sur un maximum de 15 points) sera divisée comme suit:
+  3 points pour le rapport, 3 points pour les tests, 5 points sur le
+  fonctionnement correct du code, 2 points sur la qualité du code, et
+  2 points sur l'efficacité de vos algorithmes de remplacement (en terme de
+  minimisation des TLB miss et des page faults).
+\item Tout usage de matériel (code ou texte) emprunté à quelqu'un d'autre
+  (trouvé sur le web, ...) doit être dûment mentionné, sans quoi cela sera
+  considéré comme du plagiat.
+\item Le code ne doit en aucun cas dépasser 80 colonnes.
+\item Vérifiez la page web du cours, pour d'éventuels errata, et d'autres
+  indications supplémentaires.
+\item La note sera basée d'une part sur des tests automatiques, d'autre part
+  sur la lecture du code, ainsi que sur le rapport.  Le critère le plus
+  important, et que votre code doit se comporter de manière correcte.
+  Ensuite, vient la qualité du code: plus c'est simple, mieux c'est.
+  S'il y a beaucoup de commentaires, c'est généralement un symptôme que le
+  code n'est pas clair; mais bien sûr, sans commentaires le code (même
+  simple) est souvent incompréhensible.  L'efficacité de votre code est sans
+  importance, sauf s'il utilise un algorithme vraiment particulièrement
+  ridiculement inefficace.
+\end{itemize}
+
+\end{document}
